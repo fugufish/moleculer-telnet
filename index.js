@@ -290,10 +290,6 @@ class WontEchoOptionHandler extends TelnetOptionHandler {
  *
  * * **ECHO** - The server can request that the client echo not characters. This is useful for password entry.
  *
- * **NAWS** - The server can request the client's window size. If the client responds with the window size, it will be
- * stored in the connection's metadata. When NAWS is enabled the client will typically send a window size update
- * whenever the window size changes.
- *
  * ### Adding Support for Additional Telnet Options
  * Additional Telnet options can be added by extending the {@link `TelnetOptionHandler`} class and adding the handler to the
  * service by calling the `telnet.addOptionHandler` method. When a Telnet command is received, it will be checked against
