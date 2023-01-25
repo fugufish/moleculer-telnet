@@ -24,6 +24,38 @@ class DoTTYPE {
   }
 }
 
+class DontTTYPE {
+  match(sequence) {
+    return (
+      sequence[0] === COMMANDS.IAC &&
+      sequence[1] === COMMANDS.DONT &&
+      sequence[2] === OPTIONS.TTYPE
+    );
+  }
+
+  handle(client, sequence) {
+    client.socket.write(
+      Buffer.from([COMMANDS.IAC, COMMANDS.WONT, OPTIONS.TTYPE])
+    );
+  }
+}
+
+class WontTTYPE {
+  match(sequence) {
+    return (
+      sequence[0] === COMMANDS.IAC &&
+      sequence[1] === COMMANDS.DO &&
+      sequence[2] === OPTIONS.TTYPE
+    );
+  }
+
+  handle(client, sequence) {
+    client.socket.write(
+      Buffer.from([COMMANDS.IAC, COMMANDS.WONT, OPTIONS.TTYPE])
+    );
+  }
+}
+
 class SendTTYPE {
   match(sequence) {
     return (
@@ -65,6 +97,22 @@ class WillCharset {
   }
 }
 
+class DontCharset {
+  match(sequence) {
+    return (
+      sequence[0] === COMMANDS.IAC &&
+      sequence[1] === COMMANDS.WILL &&
+      sequence[2] === OPTIONS.CHARSET
+    );
+  }
+
+  handle(client, sequence) {
+    client.socket.write(
+      Buffer.from([COMMANDS.IAC, COMMANDS.DONT, OPTIONS.CHARSET])
+    );
+  }
+}
+
 class RequestCharset {
   match(sequence) {
     return (
@@ -98,7 +146,7 @@ class RequestCharset {
 }
 
 class TelnetClient {
-  constructor() {
+  constructor(negotiations) {
     this.socket = new Socket();
     this.connected = new Promise((resolve) => {
       this.socket.on("connect", () => {
@@ -112,12 +160,7 @@ class TelnetClient {
       this.handleData(data);
     });
 
-    this.negotiations = [
-      new DoTTYPE(),
-      new SendTTYPE(),
-      new RequestCharset(),
-      new WillCharset(),
-    ];
+    this.negotiations = negotiations || [];
   }
 
   handleData(data) {
@@ -170,6 +213,10 @@ const TelnetService = {
       this.negotiations.ttype = true;
       this.checkForNegotiations();
     },
+    "telnet.ttype.disabled"() {
+      this.negotiations.ttype = true;
+      this.checkForNegotiations();
+    },
     "telnet.charset.set"() {
       this.negotiations.charset = true;
       this.checkForNegotiations();
@@ -177,7 +224,11 @@ const TelnetService = {
   },
   methods: {
     checkForNegotiations() {
-      if (this.negotiations.ttype && this.negotiations.charset) {
+      if (
+        ((this.settings.ttype && this.negotiations.ttype) ||
+          !this.settings.ttype) &&
+        ((this.settings && this.negotiations.charset) || !this.settings.charset)
+      ) {
         this.emitter.emit("negotiationsComplete");
       }
     },
@@ -238,33 +289,240 @@ describe("moleculer-telnet", () => {
         transporter: "fake",
       });
 
-      telnetService = broker.createService(TelnetService);
-
       await broker.start();
-      await telnetService.listening;
-
-      client = new TelnetClient();
-      await telnetService.connected;
-      await telnetService.negotiationsComplete;
-      await client.connected;
-
-      telnetConnection = Object.values(telnetService.connections)[0];
     });
 
     afterEach(async () => {
       await broker.stop();
     });
 
-    it("should attempt to determine the terminal type", async () => {
-      const ttype = telnetConnection.metadata.ttype;
+    describe("ttype", () => {
+      describe("enabled", () => {
+        describe("client supports", () => {
+          beforeEach(async () => {
+            telnetService = broker.createService({
+              name: "telnet",
+              mixins: [TelnetService],
+              settings: {
+                ttype: true,
+              },
+            });
+            await telnetService.listening;
 
-      expect(ttype).toBe("test");
-    });
+            client = new TelnetClient([new DoTTYPE(), new SendTTYPE()]);
 
-    it("should attempt to determine the charset", async () => {
-      const charset = telnetConnection.metadata.charset;
+            await telnetService.connected;
+            await telnetService.negotiationsComplete;
+            await client.connected;
 
-      expect(charset).toBe("UTF-8");
+            telnetConnection = Object.values(telnetService.connections)[0];
+          });
+
+          it("should attempt to determine the terminal type", async () => {
+            const ttype = telnetConnection.metadata.ttype;
+
+            expect(ttype).toBe("test");
+          });
+        });
+
+        describe("client does not support", () => {
+          beforeEach(async () => {
+            telnetService = broker.createService({
+              name: "telnet",
+              mixins: [TelnetService],
+              settings: {
+                ttype: true,
+              },
+            });
+            await telnetService.listening;
+
+            client = new TelnetClient([new WontTTYPE()]);
+
+            await telnetService.connected;
+            await telnetService.negotiationsComplete;
+            await client.connected;
+
+            telnetConnection = Object.values(telnetService.connections)[0];
+          });
+
+          it("should not attempt to determine the terminal type", async () => {
+            const ttype = telnetConnection.metadata.ttype;
+
+            expect(ttype).toEqual("generic");
+            expect(telnetConnection.metadata.ttypeEnabled).toBe(false);
+          });
+        });
+
+        describe("connection default metadata", () => {
+          beforeEach(async () => {
+            telnetService = broker.createService({
+              name: "telnet",
+              mixins: [TelnetService],
+              settings: {
+                ttype: true,
+              },
+            });
+            await telnetService.listening;
+
+            client = new TelnetClient();
+
+            await client.connected;
+            await telnetService.connected;
+
+            telnetConnection = Object.values(telnetService.connections)[0];
+          });
+
+          it("should not attempt to determine the terminal type", async () => {
+            const ttype = telnetConnection.metadata.ttype;
+
+            expect(ttype).toEqual("generic");
+            expect(telnetConnection.metadata.ttypeEnabled).toBe(false);
+          });
+        });
+
+        describe("disabled", () => {
+          beforeEach(async () => {
+            telnetService = broker.createService({
+              name: "telnet",
+              mixins: [TelnetService],
+              settings: {
+                ttype: false,
+              },
+            });
+            await telnetService.listening;
+
+            client = new TelnetClient([new DontTTYPE(), new SendTTYPE()]);
+
+            await telnetService.connected;
+            await telnetService.negotiationsComplete;
+            await client.connected;
+
+            telnetConnection = Object.values(telnetService.connections)[0];
+          });
+
+          it("should not attempt to determine the terminal type", async () => {
+            const ttype = telnetConnection.metadata.ttype;
+
+            expect(ttype).toEqual("generic");
+          });
+        });
+      });
+
+      describe("charset", () => {
+        describe("enabled", () => {
+          describe("client supports", () => {
+            beforeEach(async () => {
+              telnetService = broker.createService({
+                name: "telnet",
+                mixins: [TelnetService],
+                settings: {
+                  charset: "UTF-8",
+                },
+              });
+              await telnetService.listening;
+
+              client = new TelnetClient([
+                new WillCharset(),
+                new RequestCharset(),
+              ]);
+
+              await telnetService.connected;
+              await telnetService.negotiationsComplete;
+              await client.connected;
+
+              telnetConnection = Object.values(telnetService.connections)[0];
+            });
+
+            it("should attempt to determine the charset", async () => {
+              const charset = telnetConnection.metadata.charset;
+
+              expect(charset).toBe("UTF-8");
+            });
+          });
+
+          describe("client does not support", () => {
+            beforeEach(async () => {
+              telnetService = broker.createService({
+                name: "telnet",
+                mixins: [TelnetService],
+                settings: {
+                  charset: "UTF-8",
+                },
+              });
+              await telnetService.listening;
+
+              client = new TelnetClient([new DontCharset()]);
+
+              await telnetService.connected;
+              await telnetService.negotiationsComplete;
+              await client.connected;
+
+              telnetConnection = Object.values(telnetService.connections)[0];
+            });
+
+            it("should not attempt to determine the charset", async () => {
+              const charset = telnetConnection.metadata.charset;
+
+              expect(charset).toEqual("ascii");
+            });
+          });
+
+          describe("connection default metadata", () => {
+            beforeEach(async () => {
+              telnetService = broker.createService({
+                name: "telnet",
+                mixins: [TelnetService],
+                settings: {
+                  charset: "UTF-8",
+                },
+              });
+              await telnetService.listening;
+
+              client = new TelnetClient();
+
+              await client.connected;
+              await telnetService.connected;
+
+              telnetConnection = Object.values(telnetService.connections)[0];
+            });
+
+            it("should not attempt to determine the charset", async () => {
+              const charset = telnetConnection.metadata.charset;
+
+              expect(charset).toEqual("ascii");
+            });
+          });
+        });
+
+        describe("disabled", () => {
+          beforeEach(async () => {
+            telnetService = broker.createService({
+              name: "telnet",
+              mixins: [TelnetService],
+              settings: {
+                charset: false,
+              },
+            });
+            await telnetService.listening;
+
+            client = new TelnetClient([
+              new DontCharset(),
+              new RequestCharset(),
+            ]);
+
+            await telnetService.connected;
+            await client.connected;
+
+            telnetConnection = Object.values(telnetService.connections)[0];
+          });
+
+          it("should not attempt to determine the charset", async () => {
+            const charset = telnetConnection.metadata.charset;
+
+            expect(charset).toEqual("ascii");
+          });
+        });
+      });
     });
   });
 });

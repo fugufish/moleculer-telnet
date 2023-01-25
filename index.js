@@ -98,7 +98,11 @@ class WillTTYPEOptionHandler extends TelnetOptionHandler {
 
 class WontTTYPEOptionHandler extends TelnetOptionHandler {
   match(sequence) {
-    return sequence[0] === COMMANDS.IAC && sequence[1] === COMMANDS.WONT;
+    return (
+      sequence[0] === COMMANDS.IAC &&
+      sequence[1] === COMMANDS.WONT &&
+      sequence[2] === OPTIONS.TTYPE
+    );
   }
 
   async handle(id, service, sequence) {
@@ -227,6 +231,8 @@ class DontCharsetOptionHandler extends TelnetOptionHandler {
       key: "charset",
       value: "ascii",
     });
+
+    return service.broker.emit("telnet.charset.set", { id, charset: "ascii" });
   }
 }
 
@@ -343,6 +349,18 @@ const MoleculerTelnet = {
             id,
             key: "charset",
             value: "ascii",
+          });
+
+          await this.actions.setMetadata({
+            id,
+            key: "ttype",
+            value: "generic",
+          });
+
+          await this.actions.setMetadata({
+            id,
+            key: "ttypeEnabled",
+            value: false,
           });
           await this.negotiateTelnetOptions(id);
         },
@@ -523,8 +541,6 @@ const MoleculerTelnet = {
   name: "telnet",
 
   settings: {
-    charset: "UTF-8",
-    ttype: true,
     get port() {
       return process.env.MOLECULER_TCP_PORT || 2323;
     },
