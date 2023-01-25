@@ -1,0 +1,19 @@
+{
+  "name": "moleculer-telnet",
+  "version": "0.1.0",
+  "description": "Moleculer TELNET Server",
+  "main": "index.js",
+  "repository": "https://github.com/taujs/moleculer-telnet",
+  "author": "fugufish",
+  "license": "MIT",
+  "private": false,
+  "typings": "index.d.ts",
+  "dependencies": {
+    "moleculer": "^0.14.28",
+    "moleculer-tcp": "file:../moleculer-tcp"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.2.6",
+    "jest": "^29.3.1"
+  }
+}
