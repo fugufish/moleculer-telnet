@@ -396,6 +396,18 @@ const MoleculerTelnet = {
       },
     },
 
+    onSocketTelnetNegotiationsComplete: {
+      params: {
+        id: "string",
+      },
+      visibility: "private",
+      handler(ctx) {
+        return ctx.emit("telnet.negotiations.complete", {
+          id: ctx.params.id,
+        });
+      },
+    },
+
     registerTelnetOptionHandler: {
       params: {
         handler: "any",
@@ -481,37 +493,37 @@ const MoleculerTelnet = {
   },
 
   async started() {
-    this.actions.registerTelnetOptionHandler({ handler: TTYPEOption });
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({ handler: TTYPEOption });
+    await this.actions.registerTelnetOptionHandler({
       handler: WillTTYPEOptionHandler,
     });
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({
       handler: WontTTYPEOptionHandler,
     });
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({
       handler: WillEchoOptionHandler,
     });
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({
       handler: WontEchoOptionHandler,
     });
 
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({
       handler: DoCharsetOptionHandler,
     });
 
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({
       handler: DontCharsetOptionHandler,
     });
 
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({
       handler: AcceptCharsetOptionHandler,
     });
 
-    this.actions.registerTelnetOptionHandler({
+    await this.actions.registerTelnetOptionHandler({
       handler: RejectCharsetOptionHandler,
     });
 
-    this.logger.info("telnet settings :", this.settings);
+    await this.logger.info("telnet settings :", this.settings);
   },
 
   methods: {
@@ -529,6 +541,8 @@ const MoleculerTelnet = {
         this.logger.debug("connection: ", id, " asking to enable charset");
         this.actions.sendWill({ id, option: OPTIONS.CHARSET });
       }
+
+      return this.actions.onSocketTelnetNegotiationsComplete({ id });
     },
   },
 
